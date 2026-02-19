@@ -6,7 +6,7 @@ import os
 # groups = ['oxi3', 'oxi4', 'oxi5', 'oxi6', 'oxi7', 'oxi8', 'oxi9', 'oxi10', 'oxi11']
 
 # groups = [f'oxi{i}' for i in range(12, 31)]
-group_numbers = range(31, 52)
+group_numbers = range(52, 91)
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(script_dir, '../23rdJan2026')
