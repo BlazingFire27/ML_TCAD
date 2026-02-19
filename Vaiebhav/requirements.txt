@@ -1,0 +1,7 @@
+pandas
+numpy
+torch
+pytorch-lightning
+pina
+optuna
+scikit-learn
