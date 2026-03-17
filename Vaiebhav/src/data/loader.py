@@ -20,11 +20,9 @@ class OxidationDataLoader(Dataset):
     def _load_and_process(self):
 
         df_list = []
-        for f in self.file_paths:
+        for file_idx, f in enumerate(self.file_paths):
             df = pd.read_csv(f)
-
-            # if 'Step (n)' in df.columns:
-            #     df = df.drop(columns=['Step (n)'])
+            df['File_ID'] = file_idx
 
             cols_list = df.columns.tolist()
             # coerce to numeric (cleaning step assumed done upstream but safe to coerce)
@@ -76,22 +74,49 @@ class OxidationDataLoader(Dataset):
                     cutoff_rel_idx = len(block) - 1
 
                 sliced_block = block.iloc[: cutoff_rel_idx + 1 ].copy()
-
-                # drop Step (n) as requested
-                sliced_block = sliced_block.drop(columns=['Step (n)'])
-
+                # remove drop Step (n) logic to preserve identity
                 kept_blocks.append(sliced_block)
 
         df_final = pd.concat(kept_blocks, ignore_index=True)
 
-        # ensure logY column exists (it does)
+        # ensure logY column exists
         df_final['logY'] = np.log10(np.clip(df_final['Y'].values, 1e-9, None))
-
-        # shuffle to break ordering bias
-        df_final = df_final.sample(frac=1.0, random_state=42).reset_index(drop=True)
 
         print(f"[OxidationDataLoader] global X_max_interface = {self.X_max_interface:.6g}, extra_points = {self.extra_points}")
         return df_final        
+
+    def get_all_thicknesses(self, dg_engine):
+        """
+        Iterate over the sequential DataFrame (grouped by consecutive steps in files)
+        to extract the real thickness for every Step(n).
+        """
+        features_list = []
+        e_real_list = []
+        
+        # Group by File_ID and Step (n) to guarantee we do NOT merge identical macroscopic conditions 
+        # from different simulation steps/recipes, ensuring we don't accidentally squash 50,000 points into 10,000.
+        grouped = self.df.groupby(['File_ID', 'Step (n)'], sort=False)
+        
+        for (file_id, step_val), group_df in grouped:
+            group_df = group_df.sort_values(by='X')
+            X_arr = group_df['X'].values
+            
+            try:
+                interface_x = dg_engine.interpolate_interface(X_arr, Y_array_log10=group_df['logY'].values)
+                surface_x = float(np.min(X_arr))
+                thickness = interface_x - surface_x
+                
+                temp = group_df['Temperature'].iloc[0]
+                time = group_df['Time'].iloc[0]
+                o2 = group_df['O2 Flow'].iloc[0]
+                n2 = group_df['N2 Flow'].iloc[0]
+                
+                features_list.append([temp, time, o2, n2])
+                e_real_list.append(thickness)
+            except ValueError:
+                continue
+                
+        return np.array(features_list), np.array(e_real_list)
 
     def __len__(self):
         return len(self.targets)
