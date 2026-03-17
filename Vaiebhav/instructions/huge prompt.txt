@@ -1,0 +1,39 @@
+EVERYTHING BELOW IS SUPPOSED TO BE DONE:
+
+BEFORE STARTING(VERY IMPORTANT NOTE POINT):
+1. ANYTHING TO BE DONE FROM NOW ON, ALWAYS NOTE DOWN WHAT YOU ARE GONNA DO, WHY YOU ARE GONNA DO, HOW YOU ARE GONNA DO AND THEN ONCE THE PROCESS IS RUN, WHAT HAPPENED, WHY HAPPENED, HOW HAPPENED (DOCUMENTATION IS VERY IMPORTANT)
+2. I have created a folder for "documentation", keep adding information, md files or text files, with all the information, details, output, sometimes, screenshot of something very important or something suspicious
+
+INTRUCTION MANUAL:
+1. initially we are now gonna be following a two stage architecture to solve this problem (NOTE THAT: the aim is to later upgrade this to 2D and 3D devices, which means the idea which we are using should be able to and be extendable to higher stages in future versions (NOT NOW, NOW WE WORK ONLY WITH 1D Si-SiO2 oxidation process)
+2. we had assumed that we will be using 1atm as ref pressure for all steps
+but in actual data it is different, different pressures are available here and there and the data is completely not uniform (even between say step 1 and step 3 (note step 2 is not available given that these steps are just how tcad solved it and not how it is actually done, so step count should not be a parameter to learn) there could be changes in any of the 7D data, o2 flow, n2 flow, pressure, temperature, position X, concentration Y, time)
+SO RESEARCH AND TRY IMPLEMENTING SO CALLED LHS(latin hypercube sampling, to generate artificial data points just near both the interfaces (SiO2 and vacuum/air surface and Si SiO2 interface)
+Do the research and let me know what you have found, or maybe even find better ideas or structures or architectures or papers to do work on this data part). The reason simply is: the number of data points for this higher dimensional data is very less. Only 88 different oxi files and each files has o2 flow constant meaning only 88 different data o2 flow rate data values along the axis of o2 flow rate in the higher dimensional space
+
+similarly the number of different pressure values is also very less, means just normal regression analysis wont work
+
+3. VERY IMPORTANT: make modifications to the data preprocessing.py and extract the pressure values too and then paste those processed data in the "new processed (with pressure)" folder inside latest data
+CRITICAL: DO NOT MODIFY OLD DATA
+
+4. VERY NEXT STEP: now that we have pressure value too, combine all the data (sorted based on step (n) ), and write a script inside src to actually find the thickness values for all steps and create a new dataset called: "thickness_values.csv" and this dataset will have o2 flow, n2 flow, pressure, temp, time, X position, Y concentration and t thickness
+
+5. once the thickness is available, make modifications to the 44 percent check, so that we are actually checking whether the 44% 56% split between inside and outside the interface is correct or not(i am not sure about exact numbers, fetch them or derive them and then only try solving them and checking for them)
+
+6. once the check is run and then, note down the results in documentation folder
+
+7. and then we will understand the results and use your research on what to do with the data and try to artificially have some more data points
+
+8. once the data part is completed, now we are gonna be building the first part of model, the model now will be predicting only the thickness given the 5D input data(o2 flow, n2 flow, pressure, temp, time) (NOTE: i dont think we need X position as input to the model for predicting thickness because thickness is just x2+x1 for the end points right(note that x1 is si sio2 interface (+ve number) and x2 is a negative number)) and 1dimension output thickness
+
+9. this thickness predicting model must be insanely accuracte(note that this thickness is what will be used as reference change of variable to epsilon or something else for the next model's input)
+
+10. I UNDERSTAND THAT: this is a regression like model and there is no notion of accuracy or such, ofcourse our model target is to minimize the loss to close to zero (0)
+hence, accuracy is not the thing we are trying to work on, we are making sure somehow that the thickness predicting model must find insanely close values for the thickness
+NOTE THAT: this is a grey box, meaning some part of it is done by deal grove model and the error and change in the reality will be learnt by the grey model, thus, make sure to implement and test and run better model and also follow best practices
+
+11. you are allowed to make modifications to the project contents of VAIEBHAV FOLDER ONLY
+
+NEVER MAKE ANY CHANGES TO PALAK'S FOLDER
+NO CHANGES ARE ALLOWED FOR PALAK'S FOLDER
+CHANGES TO ANY CONTENTS IN THE PALAK FOLDER IS FORBIDDEN
