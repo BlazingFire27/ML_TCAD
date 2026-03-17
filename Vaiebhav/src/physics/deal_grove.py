@@ -13,7 +13,7 @@ k_B_eV_per_K = 8.617e-5
 class DealGrove:
     """
     Deal–Grove utility:
-      - compute partial pressure (using fixed total pressure 0.44 atm)
+      - compute partial pressure (supports per-point pressure OR fixed default)
       - DG predictor given kinetics constants (B0, EB, BA0, EBA)
       - sub-grid linear interpolation of interface from discrete X, Y profile
       - extraction of observed thickness from profile
@@ -22,6 +22,7 @@ class DealGrove:
     All I/O uses numpy arrays / scalars. Time expected in minutes (per your dataset).
     Temperature expected in degree Celsius (per your dataset).
     Flows are used as-is to compute mole/flow fraction; units cancel.
+    Pressure can be passed per-point or use the default total_pressure_atm.
     """
 
     def __init__(self, total_pressure_atm: float = 0.44, reactive_threshold_logY: float = 2.0):
@@ -31,21 +32,30 @@ class DealGrove:
     # -------------------------
     # Partial pressure (user requested fixed-total-pressure approach)
     # -------------------------
-    def compute_partial_pressure(self, o2_flow, n2_flow):
+    def compute_partial_pressure(self, o2_flow, n2_flow, pressure=None):
         """
-        Compute pO2 (in atm) from O2 and N2 flows and fixed total pressure.
-        Units of flows cancel out (fraction), so pass the values exactly as found in loader.
+        Compute pO2 (in atm) from O2 and N2 flows and total pressure.
+        
+        Args:
+            o2_flow: O2 flow rate (scalar or array)
+            n2_flow: N2 flow rate (scalar or array)
+            pressure: Total pressure in atm (scalar or array). If None, uses self.P_total_atm.
         """
         o2 = np.asarray(o2_flow, dtype=float)
         n2 = np.asarray(n2_flow, dtype=float)
         frac = o2 / (o2 + n2)
-        return frac * self.P_total_atm
+        if pressure is not None:
+            P = np.asarray(pressure, dtype=float)
+        else:
+            P = self.P_total_atm
+        return frac * P
 
     # -------------------------
     # Deal-Grove predictor (given kinetics constants)
     # -------------------------
     def predict_with_constants(self, temperature_C, time_min, o2_flow, n2_flow,
-                               B0, EB, BA0, EBA, tau_hr: float = 0.0):
+                               B0, EB, BA0, EBA, tau_hr: float = 0.0,
+                               pressure=None):
         """
         Predict oxide thickness X_ox (same units as the B0/BA0 conventions).
         - temperature_C : scalar or array (°C)
@@ -53,6 +63,7 @@ class DealGrove:
         - o2_flow, n2_flow : scalars or arrays
         - B0, EB, BA0, EBA : kinetics constants (B0, BA0 > 0)
         - tau_hr: time-shift in hours (default 0.0)
+        - pressure: total pressure in atm (scalar or array). If None, uses self.P_total_atm.
 
         Note: Because kinetics constants may be in various units in literature,
         the units of X returned depend on the units used during fit. We intentionally
@@ -68,7 +79,7 @@ class DealGrove:
         T_K = temperature_C + 273.15
         t_hr = (time_min / 60.0) + float(tau_hr)
 
-        pO2 = self.compute_partial_pressure(o2_flow, n2_flow)
+        pO2 = self.compute_partial_pressure(o2_flow, n2_flow, pressure=pressure)
 
         # Arrhenius forms
         B = B0 * np.exp(-EB / (k_B_eV_per_K * T_K)) * pO2
@@ -151,6 +162,7 @@ class DealGrove:
             n2_flow_arr,
             thickness_obs_arr,
             *,
+            pressure_arr=None,
             x0=None,
             bounds=None,
             tau_hr: float = 0.0,
@@ -165,6 +177,7 @@ class DealGrove:
         - thickness_obs_arr : observed thickness (same units as the resulting prediction)
 
         Optional:
+        - pressure_arr: total pressure array (same shape as inputs). If None, uses self.P_total_atm.
         - x0 : initial guess vector [logB0, EB, logBA0, EBA] (if None, the code supplies a default guess)
         - bounds: pair (lower, upper) bounds for least_squares
         - tau_hr: optional time shift (hours) to add to time during prediction
@@ -177,6 +190,7 @@ class DealGrove:
         tmin = np.asarray(time_min_arr, dtype=float)
         o2 = np.asarray(o2_flow_arr, dtype=float)
         n2 = np.asarray(n2_flow_arr, dtype=float)
+        pres = np.asarray(pressure_arr, dtype=float) if pressure_arr is not None else None
         y_obs = np.asarray(thickness_obs_arr, dtype=float)
 
         # default initial guess if not provided (log prefactors + energies)
@@ -196,7 +210,8 @@ class DealGrove:
             logB0, EB, logBA0, EBA = p
             B0 = np.exp(logB0)
             BA0 = np.exp(logBA0)
-            y_pred = self.predict_with_constants(T, tmin, o2, n2, B0=B0, EB=EB, BA0=BA0, EBA=EBA, tau_hr=tau_hr)
+            y_pred = self.predict_with_constants(T, tmin, o2, n2, B0=B0, EB=EB, BA0=BA0, EBA=EBA,
+                                                  tau_hr=tau_hr, pressure=pres)
             return (y_pred - y_obs).ravel()
 
         res = least_squares(residuals, x0, bounds=bounds, verbose=2 if verbose else 0, xtol=1e-10, ftol=1e-10)
@@ -217,13 +232,16 @@ class DealGrove:
     # -------------------------
     # Utility: predict using fitted dictionary
     # -------------------------
-    def predict_with_fitted(self, temperature_C, time_min, o2_flow, n2_flow, fitted_params, tau_hr: float = 0.0):
+    def predict_with_fitted(self, temperature_C, time_min, o2_flow, n2_flow, fitted_params,
+                             tau_hr: float = 0.0, pressure=None):
         """
         Convenience wrapper: given 'fitted_params' dict (keys B0, EB, BA0, EBA), predict thickness.
+        pressure: optional per-point pressure array. If None, uses self.P_total_atm.
         """
         return self.predict_with_constants(temperature_C, time_min, o2_flow, n2_flow,
                                            B0=fitted_params["B0"],
                                            EB=fitted_params["EB"],
                                            BA0=fitted_params["BA0"],
                                            EBA=fitted_params["EBA"],
-                                           tau_hr=tau_hr)
+                                           tau_hr=tau_hr,
+                                           pressure=pressure)
